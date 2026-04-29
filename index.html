@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Analysis Lab Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
+    <style>
+        :root {
+            --theme-color: #1e6f3f;
+            --theme-color-dark: #0f5530;
+            --page-bg: #eef3f7;
+            --text-main: #102018;
+            --text-muted: #667085;
+            --card-bg: #ffffff;
+            --panel-bg: #f9fafc;
+            --border: #e5ebf1;
+            --positive: #22c55e;
+            --neutral: #f59e0b;
+            --negative: #ef4444;
+        }
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: var(--page-bg); margin: 0; padding: 24px; color: var(--text-main); }
+        .container { max-width: 1480px; margin: 0 auto; background: var(--card-bg); border-radius: 32px; box-shadow: 0 20px 35px -10px rgba(0,0,0,0.08); overflow: hidden; }
+        header { padding: 28px 32px 12px; border-bottom: 1px solid var(--border); }
+        h1 { margin: 0; font-size: 2rem; }
+        .badge { background: var(--theme-color); color: white; font-size: 0.8rem; padding: 3px 10px; border-radius: 40px; margin-left: 10px; vertical-align: middle; }
+        .subtitle { color: var(--text-muted); margin-top: 10px; }
+        .mode-tabs { display: flex; gap: 8px; padding: 0 32px; margin-top: 20px; flex-wrap: wrap; }
+        .tab-btn { background: transparent; border: none; padding: 10px 24px; font-size: 1rem; cursor: pointer; border-radius: 40px; transition: all 0.2s; }
+        .tab-btn.active { background: var(--theme-color); color: white; }
+        .main-content { padding: 24px 32px 32px; }
+        .section { background: var(--panel-bg); border-radius: 24px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        label { font-weight: 700; display: block; margin-bottom: 8px; }
+        textarea, input[type="file"], select, input[type="number"], input[type="text"] {
+            width: 100%; padding: 12px; border-radius: 16px; border: 1px solid #cfdfe8; margin-bottom: 16px; font-size: 0.95rem; background: white;
+        }
+        textarea { resize: vertical; }
+        input[type="color"] { width: 56px; height: 42px; padding: 4px; border: 1px solid #cfdfe8; border-radius: 10px; background: white; cursor: pointer; }
+        input[type="range"] { flex: 1; min-width: 180px; }
+        .primary-btn {
+            background: var(--theme-color); color: white; border: none; padding: 12px 22px; border-radius: 40px; cursor: pointer; font-weight: 700; transition: all 0.2s; margin-right: 10px; margin-bottom: 10px;
+        }
+        .primary-btn:hover { background: var(--theme-color-dark); }
+        .primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .outline-btn { background: transparent; border: 1px solid var(--theme-color); color: var(--theme-color); }
+        .stop-btn { background: #dc2626; }
+        .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        .space-between { justify-content: space-between; }
+        .hint, .status-text { color: var(--text-muted); font-size: 0.92rem; }
+        .batch-size-slider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .progress-bg { background: #e2e8f0; border-radius: 20px; height: 12px; width: 100%; margin: 16px 0 8px; }
+        .progress-fill { background: var(--theme-color); width: 0%; height: 12px; border-radius: 20px; transition: width 0.2s; }
+        .result-dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+        .chart-area, .control-panel, .detail-panel, .wordcloud-panel { background: white; border-radius: 24px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .chart-wrap { height: 420px; position: relative; }
+        .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+        .control-panel h4, .detail-panel h4, .wordcloud-panel h4 { margin-top: 0; margin-bottom: 14px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+        .color-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+        .color-box { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .summary-card { background: white; border-radius: 18px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .summary-card .value { font-size: 1.6rem; font-weight: 800; margin-top: 6px; }
+        .summary-card .label { color: var(--text-muted); font-size: 0.9rem; }
+        .pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 99px; font-size: 0.82rem; font-weight: 700; }
+        .pill.positive { background: rgba(34,197,94,0.12); color: var(--positive); }
+        .pill.neutral { background: rgba(245,158,11,0.12); color: var(--neutral); }
+        .pill.negative { background: rgba(239,68,68,0.12); color: var(--negative); }
+        .minimal-table { width: 100%; border-collapse: collapse; }
+        .minimal-table th, .minimal-table td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .minimal-table th { font-size: 0.9rem; color: var(--text-muted); position: sticky; top: 0; background: white; }
+        .table-scroll { max-height: 520px; overflow: auto; border: 1px solid var(--border); border-radius: 16px; }
+        .truncate-text { max-width: 620px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+        .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+        .toolbar > * { margin-bottom: 0; }
+        .toolbar .small-input { width: 160px; margin-bottom: 0; }
+        .wordcloud-panel { margin-top: 24px; }
+        .wordcloud-canvas-wrap {
+            background: linear-gradient(180deg, #fbfdff 0%, #f3f7fb 100%);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 18px;
+            min-height: 520px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #wordCloudCanvas { width: 100%; max-width: 100%; height: 480px; border-radius: 18px; }
+        .prompt-helper { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; }
+        .prompt-helper select, .prompt-helper textarea { margin-bottom: 8px; }
+        .fixed-rule-box { background: #eef7f1; border: 1px solid rgba(30,111,63,0.2); border-radius: 16px; padding: 12px 14px; color: #18452b; font-size: 0.92rem; line-height: 1.55; }
+        .single-result-card { background: white; border: 1px solid var(--border); border-radius: 22px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .single-result-card h3 { margin-top: 0; }
+        .single-result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+        .single-result-item { background: var(--panel-bg); border-radius: 16px; padding: 14px; border: 1px solid var(--border); }
+        .single-result-item .label { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 6px; }
+        .single-result-item .value { font-size: 1.25rem; font-weight: 800; }
+        .hidden { display: none !important; }
+        @media (max-width: 1024px) {
+            .result-dashboard { grid-template-columns: 1fr; }
+            .summary-cards, .grid-2, .grid-3, .color-row, .prompt-helper, .single-result-grid { grid-template-columns: 1fr; }
+            body { padding: 10px; }
+            .main-content, header, .mode-tabs { padding-left: 18px; padding-right: 18px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>文科生也可以做到的数据分析<span class="badge">等待AI的时候，休息一下吧</span></h1>
+        <p class="subtitle">单句分析只显示文字结论；批量分析支持图表自定义、导出 PNG、CSV/Excel；文本聚焦支持词云图</p>
+    </header>
+
+    <div class="mode-tabs">
+        <button class="tab-btn active" onclick="switchMode('single', event)">单句分析</button>
+        <button class="tab-btn" onclick="switchMode('batch', event)">批量分析</button>
+        <button class="tab-btn" onclick="switchMode('keyword', event)">文本聚焦</button>
+    </div>
+
+    <div class="main-content">
+        <div class="section">
+            <div class="row space-between">
+                <label>分析规则</label>
+                <div class="row">
+                    <button class="primary-btn outline-btn" style="padding: 6px 16px;" onclick="loadExample()">恢复默认规则</button>
+                    <button class="primary-btn outline-btn" style="padding: 6px 16px;" onclick="testAIConnection()">测试 AI 接口</button>
+                </div>
+            </div>
+            <div class="prompt-helper">
+                <div>
+                    <label for="promptPreset">分析场景</label>
+                    <select id="promptPreset" onchange="applyPromptPreset()">
+                        <option value="general">通用情感分析</option>
+                        <option value="service">服务/体验评价</option>
+                        <option value="product">产品反馈</option>
+                        <option value="academic">访谈/开放题文本</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="systemPrompt">可选补充要求</label>
+                    <textarea id="systemPrompt" rows="4" placeholder="例如：更关注用户对服务态度的评价；不要把单纯提问当作负面。"></textarea>
+                    <div class="fixed-rule-box">
+                    </div>
+                </div>
+            </div>
+            <p class="status-text" id="apiStatus">后端地址：http://127.0.0.1:8000</p>
+        </div>
+
+        <div id="singleMode" class="mode-content">
+            <div class="section">
+                <label>输入文本</label>
+                <textarea id="userInput" rows="5" placeholder="粘贴评论、评价或其他文本..."></textarea>
+                <button class="primary-btn" onclick="sendRequest()">开始分析</button>
+            </div>
+        </div>
+
+        <div id="batchMode" class="mode-content hidden">
+            <div class="section">
+                <label>上传文件（CSV, Excel, Word）</label>
+                <input type="file" id="batchFileInput" accept=".csv,.xlsx,.xls,.docx" />
+                <div class="batch-size-slider">
+                    <span>每批条数：</span>
+                    <input type="range" id="batchSizeSlider" min="5" max="100" step="5" value="20" />
+                    <span id="batchSizeValue">20</span>
+                    <span class="hint">传输量太大容易触发接口超时或上下文长度限制。</span>
+                </div>
+                <button class="primary-btn" onclick="processBatchFile()">🚀 开始批量分析</button>
+                <button id="stopBtn" class="primary-btn stop-btn hidden" onclick="stopAnalysis()">⏹️ 停止</button>
+                <div id="progressContainer" class="hidden" style="margin-top:16px;">
+                    <div class="progress-bg"><div id="progressBar" class="progress-fill"></div></div>
+                    <div id="progressText" class="status-text" style="margin-top:6px;">0/0</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="keywordMode" class="mode-content hidden">
+            <div class="section">
+                <label>上传文档（TXT/CSV/Word）</label>
+                <input type="file" id="kwFileInput" accept=".txt,.csv,.docx" />
+                <div class="grid-3">
+                    <div>
+                        <label for="keywordTopN">显示关键词数量</label>
+                        <input type="number" id="keywordTopN" min="10" max="200" value="60" />
+                    </div>
+                    <div>
+                        <label for="minWordLength">最小词长</label>
+                        <input type="number" id="minWordLength" min="1" max="10" value="2" />
+                    </div>
+                    <div>
+                        <label for="minWordCount">最小词频</label>
+                        <input type="number" id="minWordCount" min="1" max="50" value="2" />
+                    </div>
+                </div>
+                <button class="primary-btn" onclick="generateWordCloud()">生成词云图</button>
+                <button class="primary-btn outline-btn" onclick="downloadWordCloud()">导出词云 PNG</button>
+                <p class="hint"> </p>
+            </div>
+        </div>
+
+        <div id="resultSection" class="hidden">
+            <div id="summaryCards" class="summary-cards hidden">
+                <div class="summary-card">
+                    <div class="label">总评论数</div>
+                    <div class="value" id="totalCountValue">0</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">正向</div>
+                    <div class="value" id="positiveCountValue">0</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">中性</div>
+                    <div class="value" id="neutralCountValue">0</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">负向</div>
+                    <div class="value" id="negativeCountValue">0</div>
+                </div>
+            </div>
+
+            <div id="batchResultArea" class="hidden">
+                <div class="result-dashboard">
+                    <div class="chart-area">
+                        <div class="row space-between" style="margin-bottom: 14px;">
+                            <h4>📊 可视化统计</h4>
+                            <span class="hint">点击图表中的某个分类，可筛选下面的评论明细。</span>
+                        </div>
+                        <div class="chart-wrap">
+                            <canvas id="myChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="control-panel">
+                        <h4>⚙️ 图表设置</h4>
+                        <label for="chartType">图表类型</label>
+                        <select id="chartType" onchange="refreshChart()">
+                            <option value="bar">条形图</option>
+                            <option value="pie">饼图</option>
+                            <option value="line">折线图</option>
+                            <option value="doughnut">环形图</option>
+                        </select>
+
+                        <div class="color-row">
+                            <div class="color-box">
+                                <label>正向颜色</label>
+                                <input type="color" id="positiveColor" value="#22c55e" onchange="refreshChart()" />
+                            </div>
+                            <div class="color-box">
+                                <label>中性颜色</label>
+                                <input type="color" id="neutralColor" value="#f59e0b" onchange="refreshChart()" />
+                            </div>
+                            <div class="color-box">
+                                <label>负向颜色</label>
+                                <input type="color" id="negativeColor" value="#ef4444" onchange="refreshChart()" />
+                            </div>
+                        </div>
+
+                        <button id="downloadBtn" class="primary-btn outline-btn hidden" onclick="downloadCSV()">💾 导出结果 CSV</button>
+                        <button id="downloadExcelBtn" class="primary-btn outline-btn hidden" onclick="downloadExcel()">📗 导出结果 Excel</button>
+                        <button id="downloadChartBtn" class="primary-btn outline-btn hidden" onclick="downloadChartImage()">🖼️ 导出图表 PNG</button>
+                        <button class="primary-btn outline-btn" onclick="resetDetailFilters()">🔄 重置筛选</button>
+                        <p class="hint">批量模式处理完后，支持下载原始数据</p>
+                    </div>
+                </div>
+
+                <div class="detail-panel" style="margin-top: 24px;">
+                    <div class="row space-between" style="margin-bottom: 14px;">
+                        <h4>📝 每条评论明细</h4>
+                        <span class="hint" id="detailInfo">显示 0 条</span>
+                    </div>
+                    <div class="toolbar">
+                        <input type="text" id="detailSearchInput" class="small-input" placeholder="搜索评论内容..." oninput="renderDetailTable()" />
+                        <select id="detailCategoryFilter" class="small-input" onchange="renderDetailTable()">
+                            <option value="All">全部分类</option>
+                            <option value="Positive">仅正向</option>
+                            <option value="Neutral">仅中性</option>
+                            <option value="Negative">仅负向</option>
+                        </select>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="minimal-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">序号</th>
+                                    <th>评论内容</th>
+                                    <th style="width: 120px;">得分</th>
+                                    <th style="width: 140px;">分类</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="wordCloudArea" class="wordcloud-panel hidden">
+                <div class="row space-between" style="margin-bottom: 14px;">
+                    <h4>☁️ 词云图</h4>
+                    <span class="hint" id="wordCloudInfo">0 个关键词</span>
+                </div>
+                <div class="wordcloud-canvas-wrap">
+                    <canvas id="wordCloudCanvas" width="1200" height="780"></canvas>
+                </div>
+            </div>
+
+            <div id="outputContent" class="section hidden"></div>
+        </div>
+    </div>
+</div>
+<script src="./script.js"></script>
+</body>
+</html>
